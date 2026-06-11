@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# link-skill — make a Claude Code skill discoverable by Codex (and other agents) too.
+#
+# Claude Code and Codex use the SAME skill format (SKILL.md + name/description
+# frontmatter); they only scan different directories. This symlinks a skill from
+# Claude Code's dir into Codex's dirs so both auto-discover the one source — no
+# rewrite, no fork. Portable: machines without Codex are skipped, not littered.
+#
+# Usage:
+#   link-skill <skill-name>        # source defaults to <claude-skills>/<skill-name>
+#   link-skill <path/to/skill>     # or an explicit skill dir
+#   link-skill --all               # link every skill found in the Claude Code dir
+#   link-skill --bootstrap         # link THIS skill (the one this script ships in)
+#   link-skill -n <name|path>      # dry-run: validate + show what it would do
+#   link-skill -u <skill-name>     # unlink from agent dirs (source untouched)
+#   link-skill -h
+#
+# Env overrides (optional):
+#   CLAUDE_SKILLS_DIR   source dir          (default: ~/.claude/skills)
+#   AGENT_SKILL_DIRS    space/colon list of target dirs to link into
+#                       (default: ~/.codex/skills ~/.agents/skills)
+
+set -euo pipefail
+
+CLAUDE_SKILLS="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+
+# Resolve target dirs. A target is "active" only if its parent already exists
+# (i.e. that agent is actually installed) — so this is a safe no-op elsewhere.
+if [ -n "${AGENT_SKILL_DIRS:-}" ]; then
+  IFS=' :' read -r -a CANDIDATES <<<"$AGENT_SKILL_DIRS"
+else
+  CANDIDATES=("$HOME/.codex/skills" "$HOME/.agents/skills")
+fi
+
+err()  { printf '\033[31m✗ %s\033[0m\n' "$*" >&2; }
+ok()   { printf '\033[32m✓ %s\033[0m\n' "$*"; }
+info() { printf '  %s\n' "$*"; }
+
+DRYRUN=0; UNLINK=0; ALL=0; BOOTSTRAP=0
+while [ "${1:-}" != "" ]; do
+  case "$1" in
+    -n|--dry-run)   DRYRUN=1; shift ;;
+    -u|--unlink)    UNLINK=1; shift ;;
+    --all)          ALL=1; shift ;;
+    --bootstrap)    BOOTSTRAP=1; shift ;;
+    -h|--help)      grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*)             err "unknown flag: $1"; exit 2 ;;
+    *)              break ;;
+  esac
+done
+
+# Build the active target list (skip agents that aren't installed).
+TARGETS=()
+for c in "${CANDIDATES[@]}"; do
+  base="$(dirname "$c")"
+  if [ -d "$c" ] || [ -d "$base" ]; then TARGETS+=("$c"); fi
+done
+if [ "${#TARGETS[@]}" -eq 0 ]; then
+  err "no agent skill dirs detected (looked for: ${CANDIDATES[*]})."
+  info "Nothing to link into — install Codex (or set AGENT_SKILL_DIRS) first."
+  exit 0
+fi
+
+# link_one <source-skill-dir>: validate (unless unlinking) then (un)link into targets.
+link_one() {
+  local SRC NAME SKILL_MD fm link cur t
+  SRC="$1"; NAME="$(basename "$SRC")"
+
+  if [ "$UNLINK" -eq 1 ]; then
+    for t in "${TARGETS[@]}"; do
+      link="$t/$NAME"
+      if [ -L "$link" ]; then rm "$link"; ok "removed $link"
+      elif [ -e "$link" ]; then err "$link exists but is NOT a symlink — left untouched"
+      else info "not linked: $link"; fi
+    done
+    return 0
+  fi
+
+  SKILL_MD="$SRC/SKILL.md"
+  [ -f "$SKILL_MD" ] || { err "no SKILL.md in $SRC — skipped"; return 1; }
+  fm="$(awk 'NR==1 && $0!="---"{exit 1} NR>1 && $0=="---"{exit} NR>1{print}' "$SKILL_MD" 2>/dev/null || true)"
+  if [ -z "$fm" ]; then err "$NAME: SKILL.md has no YAML frontmatter — skipped"; return 1; fi
+  grep -qE '^name:'        <<<"$fm" || { err "$NAME: frontmatter missing 'name:' — skipped";        return 1; }
+  grep -qE '^description:' <<<"$fm" || { err "$NAME: frontmatter missing 'description:' — skipped"; return 1; }
+  ok "valid skill: $NAME  ($SRC)"
+
+  for t in "${TARGETS[@]}"; do
+    link="$t/$NAME"
+    if [ -L "$link" ]; then
+      cur="$(readlink "$link")"
+      if [ "$cur" = "$SRC" ]; then ok "already linked: $link"; continue; fi
+      if [ "$DRYRUN" -eq 1 ]; then info "would relink $link ($cur -> $SRC)"; continue; fi
+      rm "$link"; ln -s "$SRC" "$link"; ok "relinked: $link -> $SRC"; continue
+    fi
+    if [ -e "$link" ]; then err "$link exists and is NOT a symlink — skipped (move it aside first)"; continue; fi
+    if [ "$DRYRUN" -eq 1 ]; then info "would link $link -> $SRC"; continue; fi
+    mkdir -p "$t"; ln -s "$SRC" "$link"; ok "linked: $link -> $SRC"
+  done
+}
+
+# ---- pick what to operate on ----
+if [ "$BOOTSTRAP" -eq 1 ]; then
+  SELF="$(cd "$(dirname "$0")/.." && pwd)"   # the skill dir this script ships in
+  link_one "$SELF"
+elif [ "$ALL" -eq 1 ]; then
+  [ -d "$CLAUDE_SKILLS" ] || { err "no Claude skills dir at $CLAUDE_SKILLS"; exit 1; }
+  for d in "$CLAUDE_SKILLS"/*/; do [ -f "$d/SKILL.md" ] && link_one "${d%/}" || true; done
+else
+  ARG="${1:-}"
+  [ -n "$ARG" ] || { err "need a skill name or path (or --all / --bootstrap). Try -h"; exit 2; }
+  if [ -d "$ARG" ]; then SRC="$(cd "$ARG" && pwd)"
+  elif [ -d "$CLAUDE_SKILLS/$ARG" ]; then SRC="$CLAUDE_SKILLS/$ARG"
+  else err "skill not found: '$ARG' (looked in . and $CLAUDE_SKILLS/)"; exit 1; fi
+  link_one "$SRC"
+fi
+
+[ "$DRYRUN" -eq 1 ] && info "(dry-run — nothing changed)"
+echo
+info "Restart Codex (new session) to pick up newly linked skills."
