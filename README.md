@@ -1,5 +1,10 @@
 # share-skill-with-codex
 
+[![GitHub release](https://img.shields.io/github/v/release/superchaospc/share-skill-with-codex?sort=semver)](https://github.com/superchaospc/share-skill-with-codex/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Claude Code](https://img.shields.io/badge/Claude%20Code-skill-d97757)
+![Codex](https://img.shields.io/badge/Codex-skill-412991)
+
 A Claude Code / Codex skill that makes **your other skills cross-tool**. Install it once and any
 skill you write becomes auto-discoverable — and therefore auto-triggerable — in **both** Claude Code
 and Codex.
