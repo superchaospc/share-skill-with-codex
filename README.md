@@ -69,13 +69,34 @@ git clone https://github.com/superchaospc/share-skill-with-codex \
 
 完成后**重开一个 Codex 会话**让它重新扫描目录即可。
 
-> 想完全免手动？给 Claude Code 配一个 **SessionStart hook** 跑 `link-skill --all`，每次启动自动同步所有 skill——见下方 [自动化](#自动化无人值守)。之后再写新 skill，只要一句：
+#### 4.（推荐）开启全自动 —— 配 SessionStart hook
+
+上面的步骤仍要手动跑一次。想**彻底免手动**（以后写/装任何 skill 都自动同步到 Codex），给 Claude Code 加一个 **SessionStart hook**，每次启动自动跑 `link-skill --all`。编辑 `~/.claude/settings.json`，把下面的 `SessionStart` 并入已有的 `hooks`（**不要覆盖其它 hook**）：
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/skills/share-skill-with-codex/scripts/link-skill --all >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+配好后**重启 Claude Code**（或打开一次 `/hooks` 重载配置）即可生效。命令幂等、静默、失败也不会卡住启动。详见下方 [自动化](#自动化无人值守)。
+
+之后再写新 skill，启动时自动同步、零手动。临时想手动接单个也行：
 
 ```bash
 ~/.claude/skills/share-skill-with-codex/scripts/link-skill <skill-name>
 ```
-
-或者直接让你的 agent 帮你跑——本 skill 的 description 会引导它在你写完新 skill 后自动触发。
 
 ### 命令一览
 
@@ -182,7 +203,30 @@ git clone https://github.com/superchaospc/share-skill-with-codex \
 
 Restart Codex (new session) so it rescans.
 
-> Want zero manual steps? Add a Claude Code **SessionStart hook** that runs `link-skill --all`, so every skill syncs automatically on launch — see [Automation](#automation-hands-off) below. From then on, linking a new skill is one line:
+#### 4. (Recommended) Go fully automatic — add a SessionStart hook
+
+The steps above still run once, by hand. To go **fully hands-off** (every skill you write/install syncs to Codex automatically), add a Claude Code **SessionStart hook** that runs `link-skill --all` on every launch. Edit `~/.claude/settings.json` and merge this `SessionStart` into your existing `hooks` (**don't overwrite other hooks**):
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/skills/share-skill-with-codex/scripts/link-skill --all >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Restart Claude Code** (or open `/hooks` once to reload config) to activate. The command is idempotent, silent, and `|| true` so it never blocks startup. See [Automation](#automation-hands-off) below for details.
+
+From then on, new skills sync at launch with zero manual steps. To link one ad-hoc:
 
 ```bash
 ~/.claude/skills/share-skill-with-codex/scripts/link-skill <skill-name>
