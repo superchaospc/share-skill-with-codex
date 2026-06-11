@@ -41,7 +41,7 @@
 
 因为两边格式本来就一样，**软链是唯一正确做法**：
 
-- ✅ **单一源头**——一份文件,两个工具都读它,永不分叉。
+- ✅ **单一源头**——一份文件，两个工具都读它，永不分叉。
 - ✅ 改一次，两边同步。
 - ❌ 如果把 skill「移植/改写」成 `AGENTS.md`，会**丢掉 `name`/`description` frontmatter**，破坏 Codex 的自动发现，还多出一份会逐渐走样的副本。
 
@@ -97,6 +97,8 @@ git clone https://github.com/superchaospc/share-skill-with-codex \
 ```bash
 ~/.claude/skills/share-skill-with-codex/scripts/link-skill <skill-name>
 ```
+
+或者直接让你的 agent 帮你跑——本 skill 的 description 会在你写完新 skill 后引导它自动触发。
 
 ### 命令一览
 
