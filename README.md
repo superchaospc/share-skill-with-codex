@@ -47,19 +47,29 @@
 
 ### 安装
 
+**一键安装**（推荐）：
+
+```bash
+git clone https://github.com/superchaospc/share-skill-with-codex \
+  ~/.claude/skills/share-skill-with-codex
+~/.claude/skills/share-skill-with-codex/install.sh
+```
+
+`install.sh` 会自动完成「自举本 skill + 接上全部已有 skill」。等价于手动三步：
+
 ```bash
 # 1. 放进 Claude Code 的 skills 目录
 git clone https://github.com/superchaospc/share-skill-with-codex \
   ~/.claude/skills/share-skill-with-codex
-
 # 2. 自举：把本 skill 自己先接进 Codex（解决「鸡和蛋」，只需一次）
 ~/.claude/skills/share-skill-with-codex/scripts/link-skill --bootstrap
-
-# 3. （可选）把你已有的全部 skill 一次性接上
+# 3. 把你已有的全部旧 skill 一次性接上
 ~/.claude/skills/share-skill-with-codex/scripts/link-skill --all
 ```
 
-完成后**重开一个 Codex 会话**让它重新扫描目录即可。之后再写新 skill，只要一句：
+完成后**重开一个 Codex 会话**让它重新扫描目录即可。
+
+> 想完全免手动？给 Claude Code 配一个 **SessionStart hook** 跑 `link-skill --all`，每次启动自动同步所有 skill——见下方 [自动化](#自动化无人值守)。之后再写新 skill，只要一句：
 
 ```bash
 ~/.claude/skills/share-skill-with-codex/scripts/link-skill <skill-name>
@@ -96,7 +106,32 @@ git clone https://github.com/superchaospc/share-skill-with-codex \
 Codex 在**启动时**扫描 skill 目录。重开一个新会话即可。
 
 **Q：这能保证「每次存盘自动链接」吗？**
-不能。skill 是「agent 决定参考时」才触发的。要做到存盘即确定性触发，需要的是 **hook**（由 harness 执行），而非 skill。
+单靠 skill 不能——skill 是「agent 决定参考时」才触发的。要做到**确定性、无人值守**，用下面的 hook。
+
+### 自动化（无人值守）
+
+`install.sh` 仍要手动跑一次。若想**完全免手动**——任何 skill 一出现就自动同步到 Codex——给 Claude Code 配一个 **SessionStart hook**，每次启动自动跑 `link-skill --all`。编辑 `~/.claude/settings.json`：
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/skills/share-skill-with-codex/scripts/link-skill --all >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+这样存量 + 新增 skill 都会在每次会话启动时自动接好，你再不用手动跑。hook 由 harness 确定性执行，不依赖 agent 是否「想起来」。脚本本身幂等，重复跑无副作用。
+
+> 注：这是 **Claude Code 侧**的 hook，覆盖「在 Claude Code 里写/装 skill」这个最常见场景。在 Codex 里新建的 skill，可在 Codex 侧配类似 hook，或在下次 Claude Code 启动时被 `--all` 一并补上。
 
 ---
 
@@ -125,19 +160,29 @@ Because the format is already identical, a **symlink is the correct fix**:
 
 ### Install
 
+**One-liner** (recommended):
+
+```bash
+git clone https://github.com/superchaospc/share-skill-with-codex \
+  ~/.claude/skills/share-skill-with-codex
+~/.claude/skills/share-skill-with-codex/install.sh
+```
+
+`install.sh` bootstraps this skill and links all your existing skills. Equivalent manual steps:
+
 ```bash
 # 1. Put it in Claude Code's skills dir
 git clone https://github.com/superchaospc/share-skill-with-codex \
   ~/.claude/skills/share-skill-with-codex
-
 # 2. Bootstrap: link this skill itself into Codex (chicken-and-egg, one-time)
 ~/.claude/skills/share-skill-with-codex/scripts/link-skill --bootstrap
-
-# 3. (optional) Retrofit every skill you already have
+# 3. Retrofit every skill you already have
 ~/.claude/skills/share-skill-with-codex/scripts/link-skill --all
 ```
 
-Restart Codex (new session) so it rescans. From then on, linking a new skill is one line:
+Restart Codex (new session) so it rescans.
+
+> Want zero manual steps? Add a Claude Code **SessionStart hook** that runs `link-skill --all`, so every skill syncs automatically on launch — see [Automation](#automation-hands-off) below. From then on, linking a new skill is one line:
 
 ```bash
 ~/.claude/skills/share-skill-with-codex/scripts/link-skill <skill-name>
@@ -174,7 +219,32 @@ No. They mean a real directory with that name already exists in the target (an e
 Codex scans skill dirs **at startup**. Open a new session.
 
 **Q: Does this guarantee "link on every save"?**
-No. A skill only fires when the agent chooses to consult it. For deterministic "link on save," you'd want a **hook** (run by the harness), not a skill.
+A skill alone can't — it only fires when the agent chooses to consult it. For **deterministic, hands-off** behavior, use the hook below.
+
+### Automation (hands-off)
+
+`install.sh` still runs once, by hand. To make it **fully automatic** — any skill synced to Codex the moment it appears — add a Claude Code **SessionStart hook** that runs `link-skill --all` on every launch. Edit `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/skills/share-skill-with-codex/scripts/link-skill --all >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Now existing and new skills both get linked automatically at session start — no manual step. The hook is run deterministically by the harness, regardless of whether an agent "remembers." The script is idempotent, so repeated runs are harmless.
+
+> Note: this is a **Claude-Code-side** hook, covering the common case of authoring/installing skills inside Claude Code. Skills created inside Codex can use a similar Codex-side hook, or get picked up by the next Claude Code launch via `--all`.
 
 ---
 
